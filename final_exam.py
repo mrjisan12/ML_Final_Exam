@@ -32,7 +32,7 @@ warnings.filterwarnings("ignore")
 
 """# **1. Data Loading (5 Marks)**"""
 
-df = pd. read_csv("/content/diabetes.csv")
+df = pd.read_csv("diabetes.csv")
 df.head(10)
 
 len(df.columns)
@@ -42,20 +42,11 @@ len(df)
 df.shape
 
 """# **2. Data Preprocessing (10 Marks)**
-
-## Step 1: Check missing values
 """
 
 df.isnull().sum()
 
-"""## Step 2: Handle zero values"""
 
-cols_with_zero = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
-df[cols_with_zero] = df[cols_with_zero].replace(0, df[cols_with_zero].median())
-
-df
-
-"""## Step 3: Feature / Target split"""
 
 X = df.drop("Outcome", axis=1)
 y = df["Outcome"]
@@ -74,11 +65,16 @@ IQR
 
 y
 
-"""## Step 4: Train-test split"""
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
+
+# Handle zero values AFTER train-test split (prevents data leakage)
+cols_with_zero = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+train_median = X_train[cols_with_zero].median()
+X_train[cols_with_zero] = X_train[cols_with_zero].replace(0, train_median)
+X_test[cols_with_zero] = X_test[cols_with_zero].replace(0, train_median)
 
 X_test
 
@@ -86,8 +82,6 @@ X_test
 preprocess = Pipeline([
     ("scaler", StandardScaler())
 ])
-
-"""## Step 5: Feature Scaling"""
 
 scaler = StandardScaler()
 
@@ -105,7 +99,6 @@ Logistic Regression was selected as the primary model because the dataset repres
 # 5. Model Training (10 Marks)
 """
 
-# pipeline.fit(X_train, y_train)
 
 models = {
     "Logistic Regression": LogisticRegression(max_iter=1000, class_weight="balanced"),
@@ -117,11 +110,6 @@ models = {
 }
 
 """# Cross-Validation (10 Marks)"""
-
-# cv_scores = cross_val_score(pipeline, X_train, y_train, cv=5)
-# cv_rmse = np.sqrt(cv_scores)
-
-# print(cv_rmse)
 
 results = {}
 
@@ -146,65 +134,49 @@ results_df = results_df.sort_values("Mean Accuracy", ascending=False)
 print("\n===== MODEL COMPARISON =====")
 print(results_df)
 
-# print(cv_scores.mean())
-
-# print(cv_scores.std())
 
 best_model_name = results_df.index[0]
 print(f"\nBest Model Selected: {best_model_name}")
 
 """# 7. Hyperparameter Tuning (10 Marks)"""
 
-# param_grid = {
-#     "model__C": [0.01, 0.1, 1, 10],
-#     "model__solver": ["liblinear", "lbfgs"]
-# }
-
-# grid = GridSearchCV(
-#     pipeline,
-#     param_grid,
-#     cv=5,
-#     scoring="accuracy"
-# )
-
-# grid.fit(X_train, y_train)
-
-# grid.best_params_, grid.best_score_
-
-
-
-if best_model_name == "Random Forest":
-    param_grid = {
+# Define hyperparameter grids for all models
+param_grids = {
+    "Logistic Regression": {
+        "model__C": [0.01, 0.1, 1, 10],
+        "model__max_iter": [500, 1000]
+    },
+    "Decision Tree": {
+        "model__max_depth": [5, 10, 15],
+        "model__min_samples_split": [2, 5]
+    },
+    "Random Forest": {
         "model__n_estimators": [100, 200, 300],
         "model__max_depth": [None, 5, 10]
-    }
-
-    pipeline = Pipeline([
-        ("scaler", StandardScaler()),
-        ("model", RandomForestClassifier(random_state=42))
-    ])
-
-elif best_model_name == "SVM":
-    param_grid = {
+    },
+    "Gradient Boosting": {
+        "model__n_estimators": [100, 200],
+        "model__learning_rate": [0.01, 0.1]
+    },
+    "SVM": {
         "model__C": [0.1, 1, 10],
         "model__kernel": ["rbf", "linear"]
+    },
+    "KNN": {
+        "model__n_neighbors": [3, 5, 7, 9],
+        "model__weights": ["uniform", "distance"]
     }
+}
 
-    pipeline = Pipeline([
-        ("scaler", StandardScaler()),
-        ("model", SVC(probability=True))
-    ])
 
-else:
+if best_model_name in param_grids:
+    param_grid = param_grids[best_model_name]
+    
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
         ("model", models[best_model_name])
     ])
-    pipeline.fit(X_train, y_train)
-    best_model = pipeline
 
-
-if best_model_name in ["Random Forest", "SVM"]:
     grid = GridSearchCV(
         pipeline,
         param_grid,
@@ -217,6 +189,13 @@ if best_model_name in ["Random Forest", "SVM"]:
     best_model = grid.best_estimator_
     print("\nBest Params:", grid.best_params_)
     print("Best CV Score:", grid.best_score_)
+else:
+    pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", models[best_model_name])
+    ])
+    pipeline.fit(X_train, y_train)
+    best_model = pipeline
 
 """# 8. Best Model Selection (10 Marks)"""
 
@@ -260,11 +239,11 @@ interface = gr.Interface(
     description="Enter patient details to predict diabetes"
 )
 
-interface.launch()
+interface.launch(share=True)
 
 """## Save the Model"""
 
-filename = "final_exam_model.pkl"
+filename = "final_exam_modelv2.pkl"
 
 with open( filename, "wb" ) as file:
   pickle.dump( best_model, file )
